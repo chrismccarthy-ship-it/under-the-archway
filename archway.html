@@ -115,6 +115,17 @@ select.tchip{appearance:none;border:1px solid var(--line2);color:var(--text);pad
 .optbtns .rej:hover{background:rgba(241,109,109,.08)}
 .optcard.done{opacity:.6}
 .optcard .tag{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--good)}
+.rbrow{display:flex;align-items:center;gap:9px;padding:6px 4px;font-size:12.5px;color:var(--text);cursor:pointer;border-radius:6px}
+.rbrow:hover{background:var(--panel2)}
+.rbrow input{accent-color:var(--c-int);width:15px;height:15px}
+.askrow{margin-top:7px;padding-top:6px;border-top:1px dashed var(--line);font-size:11px;color:var(--mut);line-height:1.5}
+.askrow b{font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;color:var(--c-exp)}
+.apanel{border:1px solid var(--line2);border-radius:10px;padding:11px 12px;margin-bottom:14px;background:var(--panel3)}
+.apanel h5{font-family:var(--disp);font-size:12.5px;margin-bottom:6px}
+.apanel .mix{display:flex;height:9px;border-radius:5px;overflow:hidden;margin:7px 0 4px}
+.apanel .mixlbl{font-family:var(--mono);font-size:8.5px;color:var(--faint);display:flex;gap:10px;flex-wrap:wrap}
+.apanel p{font-size:11.5px;color:var(--mut);line-height:1.55;margin-top:6px}
+.apanel p b{color:var(--text)}
 #viewport{width:100%;height:100%;cursor:grab;touch-action:none}
 #viewport.panning{cursor:grabbing}
 #viewport.connecting{cursor:crosshair}
@@ -391,6 +402,7 @@ select.tchip{appearance:none;border:1px solid var(--line2);color:var(--text);pad
   <button class="btn" id="btn-compare">⇄ Compare Paths</button>
   <button class="btn" id="btn-play">▶ Play</button>
   <button class="btn" id="btn-versions">⧉ Versions</button>
+  <button class="btn" id="btn-import" title="Upload a customer architecture diagram — JSON, draw.io, Mermaid, or an image">⇪ Import</button>
   <button class="btn" id="btn-optimize" title="Inspect the diagram and suggest improvements you can accept or reject">✨ Optimize</button>
   <button class="btn" id="btn-export">⤓ JSON</button>
   <button class="btn" id="btn-pdf" title="Export a print-ready PDF of the diagram, legend and findings">⎙ PDF</button>
@@ -427,6 +439,7 @@ select.tchip{appearance:none;border:1px solid var(--line2);color:var(--text);pad
         <option value="swim">▥ Swimlane</option>
       </select>
       <button class="tchip" id="btn-autolayout" title="Re-lay out by flow rank and neighbor barycenter">⌗ Auto Layout</button>
+      <button class="tchip" id="btn-underlay" style="display:none" title="Uploaded diagram underlay — opacity and remove">🖼 Underlay</button>
     </div>
     <div id="layerpop"></div>
     <div id="optpanel"></div>
@@ -435,6 +448,7 @@ select.tchip{appearance:none;border:1px solid var(--line2);color:var(--text);pad
     <svg id="viewport">
       <defs id="svgdefs"></defs>
       <g id="world">
+        <g id="gUnder"></g>
         <g id="gLanes"></g>
         <g id="gEdges"></g>
         <g id="gNodes"></g>
@@ -573,6 +587,70 @@ select.tchip{appearance:none;border:1px solid var(--line2);color:var(--text);pad
       </div>
     </div>
   </div>
+</div>
+
+<!-- Import diagram modal -->
+<div class="modal" id="importdmodal">
+  <div class="mbox" style="width:min(640px,94vw)">
+    <div class="mhead"><h3>Import Architecture Diagram</h3><span class="chip">json · draw.io · mermaid · image</span><button class="x" data-close="importdmodal">✕</button></div>
+    <div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px;overflow-y:auto">
+      <div id="impdrop" style="border:2px dashed var(--line2);border-radius:11px;padding:22px;text-align:center;color:var(--mut);font-size:12.5px;cursor:pointer">
+        <b style="color:var(--text)">Drop a file here</b> or click to browse<br>
+        <span style="font-size:10.5px;color:var(--faint)">Archway JSON · draw.io / diagrams.net (.drawio, .xml) · Mermaid (.mmd) · image (.png, .jpg, .webp, .svg)</span>
+        <input type="file" id="impfile" accept=".json,.drawio,.xml,.mmd,.md,.txt,application/json,text/xml,image/*" style="display:none">
+      </div>
+      <div>
+        <div class="sect" style="margin-top:0">Or paste Mermaid / draw.io XML</div>
+        <textarea id="imppaste" spellcheck="false" placeholder="graph TD&#10;  Mobile[Mobile App] --> CRM[Salesforce]&#10;  CRM --> MW[MuleSoft] --> Core[Core Banking]" style="width:100%;height:92px;background:var(--bg);border:1px solid var(--line2);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:11px;padding:10px;resize:none"></textarea>
+        <button class="btn" id="imp-parsepaste" style="margin-top:8px">Parse pasted text</button>
+      </div>
+      <div id="imp-imgtools" style="display:none;border-top:1px solid var(--line);padding-top:12px">
+        <div class="sect" style="margin-top:0">Image imported as a tracing underlay</div>
+        <div style="font-size:11.5px;color:var(--mut);line-height:1.55">The image now sits behind the canvas — trace over it by tapping components in from the library, or let AI extract it into live, analyzable components:</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px">
+          <input type="password" id="ai-key" placeholder="Anthropic API key (sk-ant-…)" autocomplete="off" style="background:var(--bg);border:1px solid var(--line2);border-radius:7px;color:var(--text);padding:8px 11px;font-size:12px">
+          <input type="text" id="ai-model" value="claude-sonnet-5-5" title="Model to use for extraction" style="background:var(--bg);border:1px solid var(--line2);border-radius:7px;color:var(--text);padding:8px 11px;font-size:12px">
+        </div>
+        <button class="btn primary" id="ai-extract" style="margin-top:9px">✨ AI-extract architecture from image</button>
+        <div id="ai-status" style="margin-top:8px;font-family:var(--mono);font-size:10px;color:var(--faint);line-height:1.6"></div>
+        <div style="margin-top:7px;font-size:10.5px;color:var(--faint);line-height:1.5">Calls the Anthropic API directly from your browser (CORS-enabled); the key stays in memory — never saved or exported. The extraction is AI-generated: review every node and connection against the original before presenting it.</div>
+      </div>
+      <div id="imp-status" style="font-family:var(--mono);font-size:10px;color:var(--faint);line-height:1.6"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Report builder modal -->
+<div class="modal" id="reportmodal">
+  <div class="mbox" style="width:min(620px,94vw)">
+    <div class="mhead"><h3>Architecture Report</h3><span class="chip">choose what to include → PDF</span><button class="x" data-close="reportmodal">✕</button></div>
+    <div style="padding:16px 18px;overflow-y:auto">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <input type="text" id="rb-customer" placeholder="Customer / audience (optional)" style="background:var(--bg);border:1px solid var(--line2);border-radius:7px;color:var(--text);padding:8px 11px;font-size:12px">
+        <input type="text" id="rb-author" placeholder="Prepared by (optional)" style="background:var(--bg);border:1px solid var(--line2);border-radius:7px;color:var(--text);padding:8px 11px;font-size:12px">
+      </div>
+      <div class="sect" style="margin-top:0">Sections</div>
+      <div id="rb-opts" style="display:flex;flex-direction:column;gap:2px">
+        <label class="rbrow"><input type="checkbox" id="rb-summary" checked> Executive summary &amp; health score</label>
+        <label class="rbrow"><input type="checkbox" id="rb-approach" checked> Fundamental approach (design review)</label>
+        <label class="rbrow"><input type="checkbox" id="rb-diagram" checked> Architecture diagram</label>
+        <label class="rbrow" style="padding-left:26px"><input type="checkbox" id="rb-legend" checked> Legend</label>
+        <label class="rbrow"><input type="checkbox" id="rb-findings" checked> Findings &amp; recommendations</label>
+        <label class="rbrow" style="padding-left:26px"><input type="checkbox" id="rb-pass"> Include passing controls</label>
+        <label class="rbrow" style="padding-left:26px"><input type="checkbox" id="rb-sources" checked> Include framework sources</label>
+        <label class="rbrow"><input type="checkbox" id="rb-questions" checked> Discovery questions for the customer</label>
+        <label class="rbrow"><input type="checkbox" id="rb-improve" checked> Suggested improvements (Optimize engine)</label>
+        <label class="rbrow"><input type="checkbox" id="rb-inventory"> Appendix — connection inventory</label>
+      </div>
+      <div style="margin-top:10px;font-size:10.5px;color:var(--faint);line-height:1.5">Opens a print-ready view — choose “Save as PDF” in the print dialog. Everything in the report comes from the live canvas.</div>
+    </div>
+    <div class="mfoot"><button class="btn" data-close="reportmodal" onclick="document.getElementById('reportmodal').classList.remove('open')">Cancel</button><button class="btn primary" id="rb-generate">⎙ Generate PDF</button></div>
+  </div>
+</div>
+
+<div id="underpop" style="position:absolute;top:52px;left:50%;transform:translateX(-50%);z-index:26;background:var(--glass);border:1px solid var(--line2);border-radius:10px;padding:11px 14px;display:none;box-shadow:0 10px 34px rgba(0,0,0,.5)">
+  <div style="font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--faint);margin-bottom:7px">DIAGRAM UNDERLAY</div>
+  <div style="display:flex;align-items:center;gap:9px;font-size:11.5px;color:var(--mut)">Opacity <input type="range" id="under-op" min="5" max="90" value="35" style="width:120px"> <button class="smallbtn" id="under-remove">Remove</button></div>
 </div>
 
 <div id="toast"></div>
@@ -1355,6 +1433,8 @@ function nodeHidden(n){return state.hiddenLanes.has(n.lane);}
 
 function render(){
   const defs=$('#svgdefs');
+  $('#gUnder').innerHTML=state.underlay?`<image href="${state.underlay.src}" x="0" y="${state.layout==='layer'?0:-64}" width="${state.layout==='layer'?WORLD_W:LANES.length*LANE_W}" opacity="${state.underlay.op}" preserveAspectRatio="xMidYMin meet" style="pointer-events:none"/>`:'';
+  const ub=$('#btn-underlay'); if(ub)ub.style.display=state.underlay?'':'none';
   const hlB=state.highlight.mode==='boundary';
   if(state.layout==='layer'){
     $('#gLanes').innerHTML=LANES.map((l,i)=>{
@@ -1892,11 +1972,13 @@ function renderAnalysis(){
     </div>
     <div style="height:5px;background:#1A2637;border-radius:3px;margin:8px 0 10px"><div style="height:100%;width:${score}%;background:${sc};border-radius:3px"></div></div>
     <div style="font-family:var(--mono);font-size:8.5px;color:var(--faint);line-height:1.6;margin-bottom:14px">FINDINGS ARE MAPPED TO PUBLISHED CONTROL FRAMEWORKS (NIST · OWASP · PCI DSS · FFIEC · GDPR · DORA) — SOURCES LISTED PER FINDING. THE HEALTH SCORE (100 − 22·HIGH − 9·MEDIUM) IS AN ILLUSTRATIVE HEURISTIC, NOT A PUBLISHED BENCHMARK.</div>
-    ${sorted.map((r,i)=>{const m=sevMeta[r.sev];const refs=refsFor(r.title);return `
+    ${approachHTML(false)}
+    ${sorted.map((r,i)=>{const m=sevMeta[r.sev];const refs=refsFor(r.title);const qs=questionsFor(r.title);return `
       <div class="riskcard" style="border-left-color:${m.c}">
         <h5><span class="sev" style="color:${m.c};border-color:${m.c}66">${m.l}</span>${esc(r.title)}</h5>
         <p>${esc(r.desc)}</p>
         <div class="rec">${r.rec}</div>
+        ${qs.length?`<div class="askrow"><b>ASK THE CUSTOMER</b><br>${qs.map(q=>'“'+esc(q)+'”').join('<br>')}</div>`:''}
         ${refs.length?`<div class="rsrc"><b>SOURCES</b><br>${refs.map(x=>`<span>${esc(x)}</span>`).join('')}</div>`:''}
         ${r.nodes.length||r.edges.length?`<button class="hl" data-ri="${i}">Highlight on canvas</button>`:''}
       </div>`;}).join('')}`;
@@ -2478,7 +2560,7 @@ $$('.modal').forEach(m=>m.addEventListener('pointerdown',ev=>{if(ev.target===m)m
 $('#templatesel').onchange=ev=>loadTemplate(ev.target.value);
 $('#libsearch').oninput=ev=>buildLibrary(ev.target.value);
 document.addEventListener('keydown',ev=>{
-  if(ev.key==='Escape'){$$('.modal').forEach(m=>m.classList.remove('open'));$('#layerpop').classList.remove('open');$('#verpop').classList.remove('open');$('#assistant').classList.remove('open');$('#library').classList.remove('mopen');$('#rightpanel').classList.remove('open');$('#optpanel').classList.remove('open');stopStory();if(state.connecting!==null||state._connectArmed){state.connecting=null;state._connectArmed=false;vp.classList.remove('connecting');$('#btn-connect').classList.remove('on');render();}}
+  if(ev.key==='Escape'){$$('.modal').forEach(m=>m.classList.remove('open'));$('#layerpop').classList.remove('open');$('#verpop').classList.remove('open');$('#assistant').classList.remove('open');$('#library').classList.remove('mopen');$('#rightpanel').classList.remove('open');$('#optpanel').classList.remove('open');$('#underpop').style.display='none';stopStory();if(state.connecting!==null||state._connectArmed){state.connecting=null;state._connectArmed=false;vp.classList.remove('connecting');$('#btn-connect').classList.remove('on');render();}}
   if((ev.key==='Delete'||ev.key==='Backspace')&&state.sel&&!/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)){
     ev.preventDefault(); removeSelected();
   }
@@ -2486,6 +2568,7 @@ document.addEventListener('keydown',ev=>{
 document.addEventListener('pointerdown',ev=>{
   if(!ev.target.closest('#verpop')&&!ev.target.closest('#btn-versions'))$('#verpop').classList.remove('open');
   if(!ev.target.closest('#layerpop')&&!ev.target.closest('#btn-layers'))$('#layerpop').classList.remove('open');
+  if(!ev.target.closest('#underpop')&&!ev.target.closest('#btn-underlay'))$('#underpop').style.display='none';
 });
 window.addEventListener('resize',()=>applyView());
 
@@ -2570,6 +2653,281 @@ function countCrossings(pm){
   let c=0;
   for(let i=0;i<segs.length;i++)for(let j=i+1;j<segs.length;j++)if(inter(segs[i][0],segs[i][1],segs[j][0],segs[j][1]))c++;
   return c;
+}
+
+/* =====================================================================
+   IMPORT & DESIGN REVIEW — upload a customer diagram, analyze it,
+   generate discovery questions, and report on the fundamental approach
+   ===================================================================== */
+function inferProto(st,tt){
+  return (st==='ai'&&tt==='mcp')?'MCP':(tt==='llm')?'LLM Inference':(st==='customer'||st==='employee')?'Human':(st==='event-bus'||tt==='event-bus'||st==='platform-events'||tt==='platform-events')?'Event':(tt==='vector-db')?'Vector Query':'REST';
+}
+function mapLabelToType(label){
+  const L=String(label||'').trim();
+  if(!L)return 'custom-app';
+  for(const d of NLDICT){if(d.re.test(L))return d.add.type;}
+  const low=L.toLowerCase();
+  /* exact catalog name first, then structural keywords, then longest fuzzy match */
+  for(const t in TYPEMAP){if(low===TYPEMAP[t].n.toLowerCase())return t;}
+  if(/\bdb\b|database/i.test(L))return 'database';
+  if(/queue|\bmq\b/i.test(L))return 'message-queue';
+  if(/gateway/i.test(L))return 'api-gateway';
+  if(/\bapi\b/i.test(L))return 'rest-api';
+  if(/service$/i.test(L))return 'microservice';
+  let best=null,bl=0;
+  for(const t in TYPEMAP){const n=TYPEMAP[t].n.toLowerCase();if((low.includes(n)||n.includes(low))&&n.length>bl){best=t;bl=n.length;}}
+  return best||'custom-app';
+}
+function importGraph(rawNodes,rawEdges,label){
+  /* rawNodes: [{id,label}] · rawEdges: [{s,t,label,dashed}] */
+  if(!rawNodes.length)throw new Error('No components found');
+  const idmap={}; state.nodes=[]; state.edges=[]; state.story=[];
+  rawNodes.forEach(rn=>{
+    const type=mapLabelToType(rn.label);
+    const tm=TYPEMAP[type]||{};
+    const cat=tm.cat||'app', lane=catToLane[cat]||'app';
+    const id='n'+(nid++); idmap[rn.id]=id;
+    state.nodes.push({id,type,name:String(rn.label||tm.n||type).slice(0,40),cat,lane,x:200,y:200,desc:tm.d||'Imported from the uploaded diagram.',c1:'',c2:'',grad:'none'});
+  });
+  rawEdges.forEach(re2=>{
+    const sN=idmap[re2.s],tN=idmap[re2.t]; if(!sN||!tN)return;
+    const sn=node(sN),tn=node(tN);
+    const proto=inferProto(sn.cat,tn.type)||'REST';
+    const mode=re2.dashed?'async':(proto==='Event'?'event':proto==='Human'?'human':'sync');
+    state.edges.push(E('e'+(eid++),sN,tN,proto,mode,{label:re2.label||'',auth:proto==='Human'?'MFA':'OAuth 2.0',latency:'—',note:'Imported — verify protocol and metadata against the source diagram.'}));
+  });
+  state.sel=null; state.highlight={mode:'all'}; state.imported=true;
+  $$('#toolbar .tchip[data-hl]').forEach(b=>b.classList.toggle('on',b.dataset.hl==='all'));
+  $('#archname').value='Imported — '+label;
+  $('#industrychip').textContent='Imported';
+  applyAutoLayout(true); runAnalysis(true); renderRight();
+  return {n:state.nodes.length,e:state.edges.length};
+}
+async function parseDrawio(xml){
+  let text=xml;
+  const dm=/<diagram[^>]*>([^<]+)<\/diagram>/.exec(xml);
+  if(dm&&!/[<>]/.test(dm[1].trim())){
+    /* compressed draw.io: base64 → raw-deflate → URI component */
+    const bin=atob(dm[1].trim());
+    const bytes=new Uint8Array([...bin].map(c=>c.charCodeAt(0)));
+    const ds=new DecompressionStream('deflate-raw');
+    const out=await new Response(new Blob([bytes]).stream().pipeThrough(ds)).text();
+    text=decodeURIComponent(out);
+  }
+  const doc=new DOMParser().parseFromString(text,'text/xml');
+  const cells=[...doc.querySelectorAll('mxCell')];
+  const rawNodes=[],rawEdges=[];
+  const strip=h=>{const d=document.createElement('div');d.innerHTML=h||'';return (d.textContent||'').replace(/\s+/g,' ').trim();};
+  cells.forEach(c=>{
+    if(c.getAttribute('vertex')==='1'&&!/edgeLabel/.test(c.getAttribute('style')||'')){
+      const lbl=strip(c.getAttribute('value'));
+      if(lbl)rawNodes.push({id:c.getAttribute('id'),label:lbl});
+    } else if(c.getAttribute('edge')==='1'){
+      rawEdges.push({s:c.getAttribute('source'),t:c.getAttribute('target'),label:strip(c.getAttribute('value')),dashed:/dashed=1/.test(c.getAttribute('style')||'')});
+    }
+  });
+  return {rawNodes,rawEdges};
+}
+function parseMermaid(text){
+  const rawNodes=[],rawEdges=[],seen={};
+  const reg=/([A-Za-z0-9_.-]+)(\[\([^)]*\)\]|\[[^\]]*\]|\(\([^)]*\)\)|\([^)]*\)|\{[^}]*\})?/g;
+  const addN=(id,lbl)=>{if(!seen[id]){seen[id]=true;rawNodes.push({id,label:lbl||id});}else if(lbl){const f=rawNodes.find(n=>n.id===id);if(f&&f.label===id)f.label=lbl;}};
+  const clean=t=>t?t.replace(/^[\[({]+|[\])}]+$/g,'').replace(/^"|"$/g,'').trim():'';
+  text.split(/\r?\n/).forEach(line=>{
+    line=line.trim();
+    if(!line||/^(graph|flowchart|subgraph|end\b|%%|classDef|class |style |linkStyle|direction)/i.test(line))return;
+    const arrow=/(-{1,3}>|={2,3}>|-\.+->)/;
+    if(arrow.test(line)){
+      /* split on arrows, capturing optional |label| */
+      const segs=line.split(/(-\.+->|={2,3}>|-{1,3}>)/);
+      let prev=null,dashPrev=false,pending='';
+      for(let i=0;i<segs.length;i++){
+        const seg=segs[i];
+        if(/^(-\.+->|={2,3}>|-{1,3}>)$/.test(seg)){dashPrev=/\./.test(seg);continue;}
+        let body=seg.trim(),elbl='';
+        const lm=/^\|([^|]*)\|/.exec(body); if(lm){elbl=lm[1].trim();body=body.slice(lm[0].length).trim();}
+        reg.lastIndex=0; const m=reg.exec(body);
+        if(!m||!m[1])continue;
+        addN(m[1],clean(m[2]));
+        if(prev)rawEdges.push({s:prev,t:m[1],label:elbl,dashed:dashPrev});
+        prev=m[1];
+      }
+    } else {
+      reg.lastIndex=0; const m=reg.exec(line);
+      if(m&&m[1]&&m[2])addN(m[1],clean(m[2]));
+    }
+  });
+  return {rawNodes,rawEdges};
+}
+
+/* ---------- AI extraction from an image (BYO Anthropic key) ---------- */
+async function aiExtract(dataUrl,key,model){
+  const mm=/^data:([^;]+);base64,(.*)$/.exec(dataUrl);
+  if(!mm)throw new Error('Unsupported image encoding');
+  const types=Object.keys(TYPEMAP).join(', ');
+  const body={model,max_tokens:4000,messages:[{role:'user',content:[
+    {type:'image',source:{type:'base64',media_type:mm[1],data:mm[2]}},
+    {type:'text',text:'Extract the enterprise architecture from this diagram. Return ONLY a JSON object, no prose, shaped as {"nodes":[{"id":"n1","label":"<name exactly as drawn>","type":"<best match from this list: '+types+'>"}],"edges":[{"s":"n1","t":"n2","label":"<edge label if any>","async":false}]}. Every box/system is a node; every arrow/line is an edge from source to target. Use type "custom-app" when nothing fits.'}
+  ]}]};
+  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify(body)});
+  if(!res.ok){const t=await res.text();throw new Error('API '+res.status+': '+t.slice(0,160));}
+  const j=await res.json();
+  const txt=(j.content||[]).map(c=>c.text||'').join('');
+  const jm=/\{[\s\S]*\}/.exec(txt);
+  if(!jm)throw new Error('No JSON in model response');
+  const g=JSON.parse(jm[0]);
+  if(!Array.isArray(g.nodes)||!g.nodes.length)throw new Error('Model returned no nodes');
+  const rawNodes=g.nodes.map(n=>({id:String(n.id),label:TYPEMAP[n.type]?String(n.label||TYPEMAP[n.type].n):String(n.label||n.id),_type:TYPEMAP[n.type]?n.type:null}));
+  const rawEdges=(g.edges||[]).map(e=>({s:String(e.s),t:String(e.t),label:e.label?String(e.label):'',dashed:!!e.async}));
+  /* honor model-suggested types where valid */
+  const saveMap=mapLabelToType;
+  const typed={}; rawNodes.forEach(n=>{if(n._type)typed[n.label]=n._type;});
+  window.__aiTypes=typed;
+  const res2=importGraph(rawNodes.map(n=>({id:n.id,label:n.label})),rawEdges,'AI-extracted diagram');
+  /* second pass: apply the model's type choices */
+  state.nodes.forEach(n=>{const t=typed[n.name];if(t&&TYPEMAP[t]){n.type=t;n.cat=TYPEMAP[t].cat;n.lane=catToLane[n.cat]||'app';}});
+  applyAutoLayout(true); runAnalysis(true);
+  return res2;
+}
+
+/* ---------- import modal wiring ---------- */
+let pendingImage=null;
+function routeImportText(text,fname){
+  const t=text.trim();
+  try{
+    if(t.startsWith('{')){deserialize(t);state.imported=true;$('#imp-status').textContent='Imported Archway JSON — '+state.nodes.length+' systems.';toast('Architecture imported');$('#importdmodal').classList.remove('open');return;}
+    if(/<mxfile|<mxGraphModel|<diagram/i.test(t)){
+      parseDrawio(t).then(({rawNodes,rawEdges})=>{
+        const r=importGraph(rawNodes,rawEdges,fname||'draw.io diagram');
+        $('#imp-status').textContent=`draw.io parsed — ${r.n} systems, ${r.e} connections. Review type mappings in the Inspector.`;
+        toast('draw.io diagram imported — '+r.n+' systems'); $('#importdmodal').classList.remove('open');
+      }).catch(err=>{$('#imp-status').textContent='draw.io parse failed: '+err.message;});
+      return;
+    }
+    if(/^(graph|flowchart)\s/im.test(t)){
+      const {rawNodes,rawEdges}=parseMermaid(t);
+      const r=importGraph(rawNodes,rawEdges,fname||'Mermaid diagram');
+      $('#imp-status').textContent=`Mermaid parsed — ${r.n} systems, ${r.e} connections.`;
+      toast('Mermaid diagram imported — '+r.n+' systems'); $('#importdmodal').classList.remove('open');
+      return;
+    }
+    $('#imp-status').textContent='Unrecognized text — expected Archway JSON, draw.io XML, or a Mermaid graph.';
+  }catch(err){$('#imp-status').textContent='Import failed: '+err.message;}
+}
+function handleImportFile(f){
+  const name=f.name||'file';
+  if(/^image\//.test(f.type)||/\.(png|jpe?g|webp|svg)$/i.test(name)){
+    const r=new FileReader();
+    r.onload=()=>{
+      pendingImage=r.result;
+      state.underlay={src:r.result,op:0.35};
+      render();
+      $('#imp-imgtools').style.display='';
+      $('#imp-status').textContent='Image placed as a canvas underlay — trace over it, or AI-extract below.';
+      toast('Diagram underlay added — 🖼 in the toolbar controls it');
+    };
+    r.readAsDataURL(f); return;
+  }
+  const r=new FileReader();
+  r.onload=()=>routeImportText(String(r.result),name);
+  r.readAsText(f);
+}
+$('#btn-import').onclick=()=>{$('#imp-status').textContent='';$('#importdmodal').classList.add('open');};
+$('#impdrop').onclick=()=>$('#impfile').click();
+$('#impfile').addEventListener('change',ev=>{const f=ev.target.files[0];if(f)handleImportFile(f);ev.target.value='';});
+$('#impdrop').addEventListener('dragover',ev=>{ev.preventDefault();ev.currentTarget.style.borderColor='var(--c-int)';});
+$('#impdrop').addEventListener('dragleave',ev=>{ev.currentTarget.style.borderColor='';});
+$('#impdrop').addEventListener('drop',ev=>{ev.preventDefault();ev.currentTarget.style.borderColor='';const f=ev.dataTransfer.files[0];if(f)handleImportFile(f);});
+$('#imp-parsepaste').onclick=()=>routeImportText($('#imppaste').value,'pasted text');
+$('#ai-extract').onclick=async()=>{
+  const key=$('#ai-key').value.trim(),model=$('#ai-model').value.trim()||'claude-sonnet-5-5';
+  const st=$('#ai-status');
+  if(!pendingImage){st.textContent='Upload an image first.';return;}
+  if(!key){st.textContent='Enter your Anthropic API key.';return;}
+  st.textContent='Extracting… (one vision call, typically 10–30 s)';
+  try{
+    const r=await aiExtract(pendingImage,key,model);
+    st.textContent=`Extracted ${r.n} systems and ${r.e} connections. The underlay stays behind the canvas for side-by-side verification.`;
+    toast('AI extraction complete — verify against the original');
+  }catch(err){
+    st.textContent=String(err.message||err).includes('Failed to fetch')
+      ?'Network blocked (sandboxed preview?). Download the file and open it directly in a browser.'
+      :'Extraction failed: '+(err.message||err);
+  }
+};
+$('#btn-underlay').onclick=()=>{const p=$('#underpop');p.style.display=p.style.display==='none'||!p.style.display?'block':'none';};
+$('#under-op').addEventListener('input',ev=>{if(state.underlay){state.underlay.op=ev.target.value/100;render();}});
+$('#under-remove').onclick=()=>{state.underlay=null;pendingImage=null;$('#underpop').style.display='none';render();};
+
+/* ---------- FUNDAMENTAL APPROACH (design review) ---------- */
+function computeApproach(){
+  const E2=state.edges.filter(e=>e.mode!=='virtual'), tot=Math.max(1,E2.length);
+  const pct=m=>Math.round(E2.filter(e=>Array.isArray(m)?m.includes(e.mode):e.mode===m).length/tot*100);
+  const mix={sync:pct('sync'),event:pct(['event','async']),batch:pct('batch'),human:pct('human')};
+  const p2p=state.edges.filter(e=>{const s=node(e.s),t=node(e.t);return s&&t&&t.cat==='core'&&(s.cat==='app'||s.cat==='experience')&&e.mode!=='virtual';}).length;
+  const hasInt=state.nodes.some(n=>['ipaas','mulesoft','api-gateway','middleware'].includes(n.type));
+  const hasMCP=state.nodes.some(n=>n.type==='mcp');
+  const hasTrust=state.nodes.some(n=>n.type==='llm-gateway');
+  const hasBus=state.nodes.some(n=>['event-bus','message-queue','platform-events'].includes(n.type));
+  const aiN=state.nodes.filter(n=>n.cat==='ai'&&!['mcp','llm-gateway'].includes(n.type)).length;
+  const customs=state.nodes.filter(n=>['custom-code','custom-app','microservice','serverless'].includes(n.type)).length;
+  const customPct=Math.round(customs/Math.max(1,state.nodes.length)*100);
+  const authPct=Math.round(E2.filter(e=>e.auth&&e.auth!=='None'&&e.auth!=='—').length/tot*100);
+  const piiN=state.edges.filter(e=>e.pii).length;
+  let postures=[];
+  if(hasInt&&p2p===0)postures.push('<b>API-led and governed</b> — every consumer reaches systems of record through a mediated layer');
+  else if(hasInt&&p2p>0)postures.push(`<b>partially governed</b> — an integration layer exists, but ${p2p} connection${p2p>1?'s':''} still bypass${p2p===1?'es':''} it`);
+  else if(p2p>=2)postures.push(`<b>point-to-point</b> — ${p2p} direct dependencies on systems of record and no mediating layer`);
+  if(mix.event>=34)postures.push('<b>event-forward</b> — a third or more of the interactions are asynchronous handoffs');
+  else if(hasBus)postures.push('<b>selectively event-driven</b> — a backbone exists for fan-out, with request/response kept synchronous');
+  if(aiN&&hasMCP&&hasTrust)postures.push('<b>AI-governed</b> — agents reach data through scoped tools and masked prompts');
+  else if(aiN&&(hasMCP||hasTrust))postures.push('<b>AI-adopting</b> — agents are present with partial governance (one of MCP / trust layer)');
+  else if(aiN)postures.push('<b>early AI</b> — models are on the canvas with no governance layer yet');
+  if(customPct>=30)postures.push(`<b>build-heavy</b> — ${customPct}% of components are custom-built`);
+  return {mix,p2p,hasInt,hasMCP,hasTrust,hasBus,aiN,customs,customPct,authPct,piiN,postures};
+}
+function approachHTML(forPrint){
+  const a=computeApproach();
+  const seg=(v,c)=>v?`<span style="width:${v}%;background:${c}"></span>`:'';
+  return `<div class="apanel">
+    <h5>Fundamental approach</h5>
+    <div class="mix">${seg(a.mix.sync,'#4989b4')}${seg(a.mix.event,'#2b9f92')}${seg(a.mix.batch,'#b08c47')}${seg(a.mix.human,'#6b8098')}</div>
+    <div class="mixlbl"><span>■ sync ${a.mix.sync}%</span><span>■ event/async ${a.mix.event}%</span><span>■ batch ${a.mix.batch}%</span><span>■ human ${a.mix.human}%</span></div>
+    <p>This architecture reads as ${a.postures.length?a.postures.join('; '):'<b>early-stage</b> — too few modeled interactions to classify'}.</p>
+    <p>${a.authPct}% of connections declare authentication · ${a.piiN} carr${a.piiN===1?'ies':'y'} PII · ${a.customs} custom-built component${a.customs===1?'':'s'} (${a.customPct}%)${a.p2p?` · ${a.p2p} point-to-point link${a.p2p>1?'s':''} into core systems`:''}.</p>
+    ${forPrint?'':'<p style="font-size:10.5px;color:var(--faint)">Classification is heuristic — computed from the live canvas, intended to open a conversation, not close one.</p>'}
+  </div>`;
+}
+
+/* ---------- discovery questions ---------- */
+const QBANK={
+ 'AI direct access':['Who holds the credentials this AI uses today — and how would you revoke its access in an incident without a redeploy?','What can this model reach that a prompt injection could reach too?'],
+ 'AI direct database':['What limits the rows and columns a model-written query can read?','Who reviews the queries the AI actually ran last month?'],
+ 'vector store retrieval':['Who can write to the embedding index, and how is that ingestion path authenticated?','If the index were poisoned, how long before you’d notice?'],
+ 'PII passes into a model':['What’s your policy for customer PII reaching an external model — and who signed off on it?','Do your model contracts prohibit training on your inputs?'],
+ 'lacks authentication':['Which internal hops are unauthenticated today — and would your last pen test have found them?'],
+ 'without encryption':['Is unencrypted sensitive traffic a known exception with a ticket, or news to the room?'],
+ 'Point-to-point':['When the core last changed an interface, how many teams had to coordinate, and how long did it take?','How many credentials to the core exist across these consumers, and who rotates them?'],
+ 'Core-to-core synchronous':['When one of these cores slows down, what else slows with it — and did that match expectations last time?'],
+ 'Concentration risk':['What’s the stated availability target for this hub — and what do its consumers assume it is?','What happens at 2× peak?'],
+ 'Custom build concentration':['Which of these custom services would you rather not own — and what’s the staffing plan for each?'],
+ 'without modeled consent':['How does a customer’s consent choice actually reach the systems using their profile today?'],
+ 'Event backbone':['Which of your nightly batches would be worth moving to this backbone first?'],
+ 'Governed integration layer':['What share of new integrations actually land on this layer vs. going around it?'],
+ 'agent-governed':['Who approves a new tool for the agent, and what’s the review gate?'],
+ 'PII masked before the model':['How do you verify the masking dictionary keeps up with new field types?'],
+ 'Zero-copy':['Who pays for query-time compute on the shared data — and does the source team know?']
+};
+function questionsFor(title){const k=Object.keys(QBANK).find(k=>title.includes(k));return k?QBANK[k]:[];}
+function approachQuestions(){
+  const a=computeApproach(), out=[];
+  out.push('What was this architecture optimized for when it was designed — and is that still the priority?');
+  if(a.p2p)out.push('If the core platform were replaced in three years, which of these connections survive?');
+  if(a.mix.batch>=20)out.push('Which of the batch flows would the business notice if it became real-time?');
+  if(a.aiN&&!a.hasMCP)out.push('As agents take on more actions here, where will tool access control live?');
+  if(!a.hasBus)out.push('When a new team needs this data next quarter, do they get an API, a file, or a database login?');
+  out.push('Who owns this diagram — and when did it last match production?');
+  return out;
 }
 
 /* ---------- ✨ OPTIMIZE DIAGRAM ---------- */
@@ -2666,8 +3024,9 @@ function openOptimize(){
 $('#btn-optimize').onclick=openOptimize;
 
 /* ---------- PDF export ---------- */
-function exportPDF(){
+function buildReport(opts){
   if(!state.nodes.length){toast('Nothing to export');return;}
+  opts=opts||{summary:1,approach:1,diagram:1,legend:1,findings:1,pass:0,sources:1,questions:1,improve:1,inventory:0,customer:'',author:''};
   const xs=state.nodes.map(n=>n.x), ys=state.nodes.map(n=>n.y);
   const padL=state.layout==='layer'?170:40, padT=state.layout==='layer'?50:110;
   const minX=Math.min(...xs)-padL, maxX=Math.max(...xs)+NW+90;
@@ -2684,8 +3043,12 @@ function exportPDF(){
   runAnalysis(true);
   const sevM={high:['#F16D6D','HIGH'],medium:['#F2B84B','MEDIUM'],low:['#56C1F5','REVIEW'],pass:['#4ADE80','PASS']};
   const order={high:0,medium:1,low:2,pass:3};
-  const findings=[...riskResults].sort((a,b)=>order[a.sev]-order[b.sev]).slice(0,8)
-    .map(r=>`<div class="pf"><span class="ps" style="color:${sevM[r.sev][0]};border-color:${sevM[r.sev][0]}66">${sevM[r.sev][1]}</span><div><b>${esc(r.title)}</b><br><span>${esc(r.desc)}</span></div></div>`).join('');
+  const findings=[...riskResults].filter(r=>opts.pass||r.sev!=='pass').sort((a,b)=>order[a.sev]-order[b.sev])
+    .map(r=>{const refs=opts.sources?refsFor(r.title):[];const qs=opts.questions?questionsFor(r.title):[];
+      return `<div class="pf"><span class="ps" style="color:${sevM[r.sev][0]};border-color:${sevM[r.sev][0]}66">${sevM[r.sev][1]}</span><div><b>${esc(r.title)}</b><br><span>${esc(r.desc)}</span><br><span style="color:var(--text)">${r.rec}</span>${qs.length?`<br><span class="pq">ASK: ${qs.map(esc).join(' · ')}</span>`:''}${refs.length?`<br><span class="psrc">${refs.map(esc).join(' · ')}</span>`:''}</div></div>`;}).join('');
+  const improveHTML=opts.improve?(function(){const S=buildOptimizations();return S.length?S.map(o=>`<div class="pf"><span class="ps" style="color:#A78BFA;border-color:#A78BFA66">SUGGEST</span><div><b>${o.t}</b><br><span>${o.d}</span></div></div>`).join(''):'<div class="pf"><div><span>No open suggestions — the diagram already communicates cleanly.</span></div></div>';})():'';
+  const qGeneral=opts.questions?approachQuestions().map(q=>`<li>${esc(q)}</li>`).join(''):'';
+  const inventory=opts.inventory?state.edges.map(e=>{const sn=node(e.s),tn=node(e.t);return sn&&tn?`<tr><td>${esc(sn.name)}</td><td>${esc(tn.name)}</td><td>${esc(e.label||e.protocol)}</td><td>${esc(MODE_LABEL[e.mode]||e.mode)}</td><td>${esc(e.auth)}</td><td>${esc(e.enc)}</td><td>${e.pii?'PII':''}${e.pii&&e.fin?' · ':''}${e.fin?'FIN':''}</td></tr>`:'';}).join(''):'';
   const legend=state.legend.map(r=>`<span class="pl">${(function(){const map={solid:`border-top:2px solid ${r.color}`,dashed:`border-top:2px dashed ${r.color}`,dotted:`border-top:2px dotted ${r.color}`,double:`border-top:3px double ${r.color}`};return `<i style="display:inline-block;width:24px;vertical-align:middle;margin-right:6px;${map[r.style]||map.solid}"></i>`;})()}${esc(r.label)}</span>`).join('');
   const highs=riskResults.filter(r=>r.sev==='high').length, meds=riskResults.filter(r=>r.sev==='medium').length;
   const score=Math.max(20,100-highs*22-meds*9);
@@ -2709,18 +3072,42 @@ html,body{height:auto!important;overflow:visible!important;background:${theme===
 .pf b{color:var(--text);font-size:11.5px}
 .ps{font-family:var(--mono);font-size:8px;letter-spacing:.1em;border:1px solid;border-radius:4px;padding:1px 6px;height:fit-content;white-space:nowrap}
 .pdffoot{margin-top:14px;font-family:var(--mono);font-size:9px;color:var(--faint)}
+.pq{font-size:10px;color:#4989b4;font-style:italic}
+.psrc{font-family:var(--mono);font-size:8px;color:var(--faint)}
+.pqul{margin:2px 0 0 18px}
+.pqul li{font-size:11px;color:var(--mut);line-height:1.6;margin-bottom:3px}
+.pinv{border-collapse:collapse;width:100%;font-size:9.5px}
+.pinv th,.pinv td{border:1px solid var(--line2);padding:3px 7px;text-align:left;color:var(--mut)}
+.pinv th{font-family:var(--mono);font-size:8px;letter-spacing:.08em;color:var(--text)}
+.apanel{page-break-inside:avoid}
 </style></head><body class="${theme==='light'?'light':''}"><div class="pdfwrap">
-<div class="pdfhead"><h1>${esc($('#archname').value)}</h1><span class="meta">${esc($('#industrychip').textContent)} · ${state.nodes.length} systems · ${state.edges.length} connections · ${state.layout==='layer'?'Layer Cake':'Swimlane'} layout · ${new Date().toLocaleDateString()}</span><span class="pdfscore">Health ${score}</span></div>
-<div class="pdfsvg">${clone.outerHTML}</div>
-<div class="pdfleg">${legend}</div>
-<div class="pdffind"><h2>Analysis — ${highs} high · ${meds} medium (findings mapped to NIST · OWASP · PCI DSS · FFIEC · GDPR · DORA)</h2>${findings}</div>
-<div class="pdffoot">Generated by Archway — use your browser's print dialog to save as PDF.</div>
+<div class="pdfhead"><h1>${esc($('#archname').value)}</h1><span class="meta">${opts.customer?esc(opts.customer)+' · ':''}${esc($('#industrychip').textContent)} · ${state.nodes.length} systems · ${state.edges.length} connections · ${new Date().toLocaleDateString()}${opts.author?' · prepared by '+esc(opts.author):''}</span>${opts.summary?`<span class="pdfscore">Health ${score}</span>`:''}</div>
+${opts.summary?`<div class="pdffind" style="margin-bottom:10px"><span style="font-size:11.5px;color:var(--mut);line-height:1.55">This review covers ${state.nodes.length} systems and ${state.edges.length} connections${state.imported?' imported from the customer\u2019s diagram':''}. The analysis engine reports <b style="color:var(--text)">${highs} high</b> and <b style="color:var(--text)">${meds} medium</b> findings against published control frameworks; the health score (${score}) is an illustrative heuristic.</span></div>`:''}
+${opts.approach?approachHTML(true):''}
+${opts.diagram?`<div class="pdfsvg">${clone.outerHTML}</div>`:''}
+${opts.diagram&&opts.legend?`<div class="pdfleg">${legend}</div>`:''}
+${opts.findings?`<div class="pdffind"><h2>Findings — ${highs} high · ${meds} medium (mapped to NIST · OWASP · PCI DSS · FFIEC · GDPR · DORA)</h2>${findings}</div>`:''}
+${opts.improve?`<div class="pdffind"><h2>Suggested improvements</h2>${improveHTML}</div>`:''}
+${opts.questions?`<div class="pdffind"><h2>Discovery questions</h2><ul class="pqul">${qGeneral}</ul></div>`:''}
+${opts.inventory?`<div class="pdffind"><h2>Appendix — connection inventory</h2><table class="pinv"><tr><th>From</th><th>To</th><th>Protocol</th><th>Mode</th><th>Auth</th><th>Encryption</th><th>Data</th></tr>${inventory}</table></div>`:''}
+<div class="pdffoot">Generated by Archway — heuristic design review for conversation, not a compliance assessment. Use your browser's print dialog to save as PDF.</div>
 </div><script>window.onload=function(){setTimeout(function(){window.print()},600)}<\/script></body></html>`);
   win.document.close();
   toast('PDF view opened — choose "Save as PDF" in the print dialog');
 }
-$('#btn-pdf').onclick=exportPDF;
-$('#btn-pdf2').onclick=()=>{$('#exportmodal').classList.remove('open');exportPDF();};
+function openReportBuilder(){runAnalysis(true);$('#reportmodal').classList.add('open');}
+$('#btn-pdf').onclick=openReportBuilder;
+$('#btn-pdf2').onclick=()=>{$('#exportmodal').classList.remove('open');openReportBuilder();};
+$('#rb-generate').onclick=()=>{
+  const v=id=>$('#'+id).checked?1:0;
+  const opts={summary:v('rb-summary'),approach:v('rb-approach'),diagram:v('rb-diagram'),legend:v('rb-legend'),
+    findings:v('rb-findings'),pass:v('rb-pass'),sources:v('rb-sources'),questions:v('rb-questions'),
+    improve:v('rb-improve'),inventory:v('rb-inventory'),
+    customer:$('#rb-customer').value.trim(),author:$('#rb-author').value.trim()};
+  if(!opts.summary&&!opts.approach&&!opts.diagram&&!opts.findings&&!opts.improve&&!opts.questions&&!opts.inventory){toast('Pick at least one section');return;}
+  $('#reportmodal').classList.remove('open');
+  buildReport(opts);
+};
 
 /* ---------- editable, movable legend ---------- */
 state.legend=[
