@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Archway — Financial Services Architecture Intelligence</title>
+<title>Archway</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -389,6 +389,12 @@ select.tchip{appearance:none;border:1px solid var(--line2);color:var(--text);pad
       <option value="qrpay">Digital / QR Payments</option>
       <option value="credit">Real-Time Credit Decisioning</option>
       <option value="swift">SWIFT Connectivity on Cloud</option>
+    </optgroup>
+    <optgroup label="Wealth Management">
+      <option value="advisor">Advisor Desktop — Client 360</option>
+      <option value="aiadvisor">AI Advisor Assistant</option>
+      <option value="portfoliodata">Portfolio Data Integration</option>
+      <option value="tradeint">Trading Integration</option>
     </optgroup>
     <optgroup label="Insurance &amp; Enterprise">
       <option value="claims">AI Claims Assistant</option>
@@ -822,6 +828,7 @@ const CATALOG=[
   {t:'policy-admin',n:'Policy Administration',i:'clipboard',d:'Insurance policy system of record.'},
   {t:'loan-serv',n:'Loan Servicing',i:'docpct',d:'Ongoing loan lifecycle system.'},
   {t:'trading',n:'Trading Platform',i:'trend',d:'Order management and execution.'},
+  {t:'custodian',n:'Custodian / Clearing',i:'bank',d:'Asset custody, clearing and settlement (e.g. Pershing, Fidelity, Schwab).'},
   {t:'mainframe',n:'Mainframe',i:'server',d:'z/OS core — COBOL, CICS.'},
   {t:'legacy',n:'Legacy Application',i:'server',d:'Aging system with limited APIs.'},
   {t:'gl',n:'General Ledger',i:'bank',d:'Financial book of record.'},
@@ -835,6 +842,7 @@ const CATALOG=[
   {t:'cdp',n:'Customer Data Platform',i:'persondb',d:'Unified customer profile.'},
   {t:'feature-store',n:'Feature Store',i:'boltdb',d:'Low-latency ML features.'},
   {t:'cache',n:'Cache',i:'boltdb',d:'Low-latency read layer.'},
+  {t:'market-data',n:'Market Data Feed',i:'trend',d:'Real-time quotes, pricing and reference data.'},
   {t:'file-storage',n:'File Storage',i:'folder',d:'Object / document storage.'}]},
  {g:'Cloud & Infrastructure',cat:'dev',items:[
   {t:'aws',n:'AWS',i:'cloud',d:'Amazon Web Services region / account.'},
@@ -1286,6 +1294,156 @@ loanagent:{
   {f:'agent',t:'mcp',cap:'Facts come from <b>MCP tools</b>: getPayoffQuote against governed APIs — never a database query.'},
   {f:'mule',t:'loanserv',cap:'<b>Loan servicing</b> computes the quote; core data reaches the data platform by <b>zero-copy federation</b>.'},
   {f:'crm',t:'agent',cap:'The customer gets a grounded answer with the exact payoff amount — <b>and no PII ever left the trust boundary</b>.'}
+ ]
+},
+advisor:{
+ name:'Advisor Desktop — Client 360', industry:'Wealth Management',
+ nodes:[
+  N('advisor','employee','Financial Advisor',120,46),
+  N('desktop','portal','Advisor Desktop',420,46,{desc:'One workspace: book of business, households, tasks, alerts — no swivel-chair.'}),
+  N('nba','recommendation','Next Best Action',150,196),
+  N('fsc','salesforce','Salesforce FSC',420,346,{c1:'#00A1E0',c2:'#1B6FD0',grad:'d',desc:'Financial Services Cloud — households, relationships, financial accounts, referrals.'}),
+  N('planning','saas','Financial Planning',900,346,{desc:'Goals-based planning tool (MoneyGuide/eMoney-class).'}),
+  N('mule','mulesoft','MuleSoft',420,496),
+  N('cdp','datacloud','Data 360 — Household 360',1060,646,{desc:'Unified household profiles: custodial positions + CRM + planning, identity-resolved.'}),
+  N('portacct','wealth','Portfolio Accounting',420,646,{desc:'Positions, performance, billing — book of record for managed assets.'}),
+  N('mkt','market-data','Market Data Feed',150,646),
+  N('cust','custodian','Custodian',700,796,{desc:'Street-side custody and clearing; T+1 files plus intraday APIs.'})
+ ],
+ edges:[
+  E('wa1','advisor','desktop','Human','human',{auth:'SSO',payload:'\u2014',pii:true}),
+  E('wa2','desktop','fsc','REST','sync',{pii:true,latency:'~80 ms',note:'Experience API \u2014 the desktop is an FSC surface.'}),
+  E('wa3','fsc','nba','REST','sync',{pii:true,latency:'~45 ms',note:'Signals \u2192 ranked advisor actions.'}),
+  E('wa4','fsc','mule','REST','sync',{dir:'Bidirectional',pii:true,latency:'~90 ms'}),
+  E('wa5','mule','portacct','REST','sync',{auth:'mTLS + OAuth 2.0',fin:true,latency:'~130 ms',note:'Positions, performance, fees via system API.'}),
+  E('wa6','mule','planning','REST','sync',{pii:true,latency:'~150 ms',note:'Plan summary surfaced in the household record.'}),
+  E('wa7','cust','portacct','SFTP','batch',{auth:'Service Account',fin:true,payload:'Positions/transactions files',latency:'T+1 06:00',note:'Overnight custodial files.'}),
+  E('wa8','mule','cust','REST','sync',{auth:'mTLS',fin:true,latency:'~250 ms',note:'Intraday balances and status.'}),
+  E('wa9','mkt','portacct','Streaming','event',{auth:'API Key',payload:'Quotes',dir:'Subscribe',latency:'~200 ms',volume:'EOD + snap',note:'Pricing for valuations.'}),
+  E('wa10','portacct','cdp','Batch','batch',{pii:true,fin:true,latency:'nightly',note:'Positions into the household profile.'}),
+  E('wa11','fsc','cdp','Zero-Copy','virtual',{payload:'SQL (federated)',latency:'query-time',note:'FSC reads unified household insights in place.'}),
+  E('wa12','cdp','nba','Batch','batch',{latency:'hourly',note:'Propensity + life-event signals.'})
+ ],
+ story:[
+  {n:'advisor',cap:'7:45 AM. An advisor opens one screen before a day of client meetings: <b>the Advisor Desktop</b>.'},
+  {f:'desktop',t:'fsc',cap:'The desktop is a surface on <b>Salesforce FSC</b> \u2014 households, relationships, and financial accounts in one model.'},
+  {f:'cust',t:'portacct',cap:'Overnight, the <b>custodian\u2019s T+1 files</b> landed in portfolio accounting; intraday APIs keep balances fresh after the open.'},
+  {f:'portacct',t:'cdp',cap:'Positions flow into <b>Data 360</b>, where identity resolution stitches custodial accounts, CRM and planning into one <b>household</b>.'},
+  {f:'fsc',t:'cdp',cap:'FSC reads that household view by <b>zero-copy federation</b> \u2014 no second copy of the book to reconcile.'},
+  {f:'fsc',t:'nba',cap:'<b>Next Best Action</b> ranks the morning: a concentrated position to discuss, a 529 opportunity, a client who just sold a business.'},
+  {f:'advisor',t:'desktop',cap:'One desktop, every system behind governed APIs \u2014 the advisor spends the day advising, not swivel-chairing.'}
+ ]
+},
+aiadvisor:{
+ name:'AI Advisor Assistant', industry:'Wealth Management',
+ nodes:[
+  N('advisor','employee','Financial Advisor',120,46),
+  N('chat','chat','Assistant Chat',420,46,{desc:'Embedded in the advisor desktop \u2014 \u201cprep me for the Hendersons.\u201d'}),
+  N('agent','agentforce','Advisor Agent',420,196,{desc:'Meeting prep, household Q&A, and service actions through governed tools only.'}),
+  N('trust','llm-gateway','Einstein Trust Layer',740,196,{desc:'Masks client PII before inference; audits every prompt \u2014 the record your compliance team reviews.'}),
+  N('llm','llm','LLM',1060,196),
+  N('fsc','salesforce','Salesforce FSC',420,346,{c1:'#00A1E0',c2:'#1B6FD0',grad:'d'}),
+  N('mcp','mcp','MCP Server',420,496,{desc:'getHousehold, getPositions, getPerformance, draftMeetingAgenda \u2014 scoped, logged, revocable.'}),
+  N('mule','mulesoft','MuleSoft',740,496),
+  N('vecdb','vector-db','Vector DB',150,646,{desc:'Research notes, meeting history, product and policy knowledge \u2014 no account numbers in the index.'}),
+  N('cdp','datacloud','Data 360',1060,646),
+  N('portacct','wealth','Portfolio Accounting',420,796,{lane:'core',cat:'core'}),
+  N('cust','custodian','Custodian',780,796)
+ ],
+ edges:[
+  E('wb1','advisor','chat','Human','human',{auth:'SSO',payload:'\u2014',pii:true}),
+  E('wb2','chat','fsc','REST','sync',{pii:true,latency:'~70 ms'}),
+  E('wb3','fsc','agent','Agent API','sync',{pii:true,latency:'~50 ms',note:'In-org agent routing is native; Agent API label denotes the external-invocation surface.'}),
+  E('wb4','agent','trust','LLM Inference','sync',{pii:true,latency:'~60 ms',note:'Raw household context in \u2014 the trust layer masks it.'}),
+  E('wb5','trust','llm','LLM Inference','sync',{pii:false,latency:'~850 ms',note:'Masked, policy-checked prompt only. Zero retention.'}),
+  E('wb6','agent','vecdb','Vector Query','sync',{auth:'API Key',latency:'~30 ms',note:'Meeting notes + research retrieval.'}),
+  E('wb7','agent','mcp','MCP','sync',{latency:'~40 ms',note:'Tools only \u2014 the model never holds custody credentials.'}),
+  E('wb8','mcp','mule','REST','sync',{fin:true,latency:'~60 ms'}),
+  E('wb9','mule','portacct','REST','sync',{auth:'mTLS + OAuth 2.0',fin:true,pii:true,latency:'~140 ms',note:'Positions and performance via system API.'}),
+  E('wb10','mule','cust','REST','sync',{auth:'mTLS',fin:true,latency:'~250 ms',note:'Intraday balances.'}),
+  E('wb11','agent','cdp','Zero-Copy','virtual',{payload:'SQL (federated)',latency:'~200 ms',note:'Household insights queried in place.'}),
+  E('wb12','portacct','cdp','Batch','batch',{fin:true,pii:true,latency:'nightly'})
+ ],
+ story:[
+  {n:'advisor',cap:'An advisor types: <b>\u201cPrep me for the Hendersons at 2 PM.\u201d</b>'},
+  {f:'chat',t:'fsc',cap:'The request lands in <b>FSC</b>, which owns the household, the relationship map, and the meeting history.'},
+  {f:'fsc',t:'agent',cap:'The <b>advisor agent</b> plans the brief: positions, performance vs. goals, recent life events, open tasks.'},
+  {f:'agent',t:'trust',cap:'Reasoning passes the <b>Einstein Trust Layer</b> \u2014 PII masked before the model, every prompt audited. That audit trail is what compliance signs off on.'},
+  {f:'agent',t:'mcp',cap:'Facts come from <b>MCP tools</b> \u2014 getPositions, getPerformance \u2014 against governed APIs, never a database login.'},
+  {f:'mule',t:'portacct',cap:'<b>Portfolio accounting</b> and the <b>custodian</b> answer through the same system APIs the desktop uses \u2014 one contract, every consumer.'},
+  {f:'fsc',t:'agent',cap:'Ninety seconds later: a grounded meeting brief with talking points \u2014 <b>and no client PII ever left the trust boundary</b>.'}
+ ]
+},
+portfoliodata:{
+ name:'Portfolio Data Integration', industry:'Wealth Management \u00b7 Data',
+ nodes:[
+  N('idres','identity-res','Identity Resolution',480,196,{desc:'Stitches accounts across custodians into households.'}),
+  N('recon','custom-app','Reconciliation',1100,346,{desc:'Positions vs. custodial records \u2014 breaks surfaced before advisors see bad data.'}),
+  N('fsc','salesforce','Salesforce FSC',420,346,{c1:'#00A1E0',c2:'#1B6FD0',grad:'d'}),
+  N('etl','etl','Ingestion / ETL',420,496),
+  N('bus','event-bus','Event Bus',1100,496),
+  N('lake','lakehouse','Lakehouse',480,646,{desc:'Normalized custodial data \u2014 the analytical book of record.'}),
+  N('cdp','datacloud','Data 360',1060,646),
+  N('mkt','market-data','Market Data Feed',150,646),
+  N('cust1','custodian','Custodian A',420,796),
+  N('cust2','custodian','Custodian B',780,796)
+ ],
+ edges:[
+  E('wc1','cust1','etl','SFTP','batch',{auth:'Service Account',fin:true,pii:true,payload:'Positions/Tx/Cost basis',latency:'T+1 05:30',note:'Nightly files \u2014 the wealth industry still runs on them.'}),
+  E('wc2','cust2','etl','SFTP','batch',{auth:'Service Account',fin:true,pii:true,payload:'Positions/Tx',latency:'T+1 06:10',note:'Second custodian, different file spec \u2014 normalized in ETL.'}),
+  E('wc3','etl','lake','Batch','batch',{fin:true,pii:true,latency:'by 07:00',note:'One canonical schema across custodians.'}),
+  E('wc4','mkt','bus','Streaming','event',{auth:'API Key',payload:'Quotes',dir:'Publish',latency:'~200 ms'}),
+  E('wc5','bus','lake','Event','event',{dir:'Subscribe',latency:'~30 ms',note:'Pricing for valuation.'}),
+  E('wc6','lake','recon','REST','sync',{fin:true,latency:'~90 ms',note:'Break detection vs. custodial records.'}),
+  E('wc7','lake','idres','Batch','batch',{pii:true,note:'Account \u2192 household candidates.'}),
+  E('wc8','idres','cdp','Batch','batch',{pii:true,note:'Unified households.'}),
+  E('wc9','lake','cdp','Zero-Copy','virtual',{payload:'Iceberg tables',latency:'query-time',note:'Positions federated \u2014 never copied into Data 360.'}),
+  E('wc10','cdp','fsc','REST','sync',{pii:true,latency:'~95 ms',note:'Household insights into the advisor\u2019s CRM.'}),
+  E('wc11','recon','bus','Event','event',{dir:'Publish',latency:'~10 ms',note:'recon.break events \u2014 ops and advisors alerted.'})
+ ],
+ story:[
+  {f:'cust1',t:'etl',cap:'5:30 AM. <b>Custodial files</b> land \u2014 two custodians, two file specs, one ingestion pipeline.'},
+  {f:'etl',t:'lake',cap:'By 7:00 the <b>lakehouse</b> holds one canonical schema \u2014 positions, transactions, cost basis across the whole book.'},
+  {f:'lake',t:'recon',cap:'<b>Reconciliation</b> runs before any advisor logs in \u2014 breaks publish as events, not surprises.'},
+  {f:'lake',t:'idres',cap:'<b>Identity resolution</b> stitches accounts across custodians into <b>households</b> \u2014 the unit advisors actually manage.'},
+  {f:'lake',t:'cdp',cap:'Data 360 reads positions by <b>zero-copy federation</b> \u2014 one book of record, no divergent copies.'},
+  {f:'cdp',t:'fsc',cap:'Unified household insights surface in <b>FSC</b> \u2014 the advisor sees reconciled, identity-resolved data by market open.'}
+ ]
+},
+tradeint:{
+ name:'Trading Integration', industry:'Wealth Management \u00b7 Trading',
+ nodes:[
+  N('advisor','employee','Financial Advisor',120,46),
+  N('fsc','salesforce','Salesforce FSC',420,346,{c1:'#00A1E0',c2:'#1B6FD0',grad:'d',desc:'Where the order is proposed and its status is visible to the advisor.'}),
+  N('suit','kyc','Suitability / Compliance',900,346,{lane:'app',desc:'Pre-trade checks: suitability, concentration, restricted list.'}),
+  N('mule','mulesoft','MuleSoft',420,496),
+  N('bus','event-bus','Event Bus',1100,496),
+  N('oms','trading','OMS',420,646,{lane:'data',cat:'core',desc:'Order management \u2014 blotter, allocations, routing.'}),
+  N('mkt','market-data','Market Data Feed',150,646),
+  N('exec','trading','Execution / EMS',420,796,{desc:'Routes to venues; fills return over FIX.'}),
+  N('portacct','wealth','Portfolio Accounting',780,796,{lane:'core',cat:'core'}),
+  N('cust','custodian','Custodian',1100,796)
+ ],
+ edges:[
+  E('wd1','advisor','fsc','Human','human',{auth:'SSO',payload:'\u2014',pii:true}),
+  E('wd2','fsc','mule','REST','sync',{fin:true,latency:'~90 ms',note:'Proposed order via process API.'}),
+  E('wd3','mule','suit','REST','sync',{pii:true,fin:true,latency:'~120 ms',note:'Pre-trade compliance \u2014 nothing routes unchecked.'}),
+  E('wd4','mule','oms','REST','sync',{auth:'mTLS + OAuth 2.0',fin:true,latency:'~80 ms',note:'Accepted order to the blotter.'}),
+  E('wd5','mkt','oms','Streaming','event',{auth:'API Key',payload:'Quotes',dir:'Subscribe',latency:'~200 ms'}),
+  E('wd6','oms','exec','FIX','sync',{auth:'mTLS',fin:true,payload:'FIX 4.4 NewOrderSingle',latency:'~15 ms',note:'Order routing over FIX.'}),
+  E('wd7','exec','bus','Event','event',{fin:true,dir:'Publish',latency:'~10 ms',volume:'fills',note:'Execution reports stream back.'}),
+  E('wd8','bus','portacct','Event','event',{fin:true,dir:'Subscribe',latency:'~20 ms',note:'Fills post to the book of record.'}),
+  E('wd9','bus','fsc','Event','event',{dir:'Subscribe',latency:'~25 ms',note:'Order status visible to the advisor \u2014 no phone calls to the desk.'}),
+  E('wd10','portacct','cust','REST','sync',{auth:'mTLS',fin:true,latency:'~300 ms',note:'Settlement instructions; custodian clears T+1.'})
+ ],
+ story:[
+  {n:'advisor',cap:'An advisor proposes a rebalance: <b>sell the concentrated position, buy the model</b>.'},
+  {f:'fsc',t:'mule',cap:'The order leaves <b>FSC</b> through a governed process API \u2014 the CRM proposes, it never routes.'},
+  {f:'mule',t:'suit',cap:'<b>Pre-trade compliance</b> first: suitability, concentration, restricted list. Nothing reaches a venue unchecked.'},
+  {f:'mule',t:'oms',cap:'The accepted order lands on the <b>OMS blotter</b> with live market data.'},
+  {f:'oms',t:'exec',cap:'Routing is <b>FIX</b> \u2014 the 30-year-old protocol that still moves the world\u2019s orders, ~15 ms to the EMS.'},
+  {f:'exec',t:'bus',cap:'<b>Fills stream back as events</b> \u2014 portfolio accounting posts them, and FSC shows the advisor live status.'},
+  {f:'portacct',t:'cust',cap:'Settlement instructions go to the <b>custodian</b>; the trade clears T+1. Advisor to venue and back \u2014 every hop governed, checked, and visible.'}
  ]
 },
 swift:{
@@ -2247,6 +2405,10 @@ const NLDICT=[
  {re:/policy admin/i, add:{type:'policy-admin',name:'Policy Admin'}, key:'core'},
  {re:/kyc|aml|sanctions/i, add:{type:'kyc',name:'KYC / AML'}, key:'core'},
  {re:/bureau/i, add:{type:'credit-bureau',name:'Credit Bureau'}, key:'core'},
+ {re:/custod|clearing|pershing/i, add:{type:'custodian',name:'Custodian'}, key:'core'},
+ {re:/\boms\b|order management|trading/i, add:{type:'trading',name:'Trading Platform (OMS)'}, key:'core'},
+ {re:/wealth|portfolio account/i, add:{type:'wealth',name:'Portfolio Platform'}, key:'app2'},
+ {re:/market data|quotes|pricing feed/i, add:{type:'market-data',name:'Market Data Feed'}, key:'lake'},
  {re:/servicenow|itsm/i, add:{type:'servicenow',name:'ITSM (ServiceNow)'}, key:'app2'},
  {re:/mulesoft/i, add:{type:'mulesoft',name:'MuleSoft'}, key:'ipaas'},
  {re:/ipaas|integration layer|boomi/i, add:{type:'ipaas',name:'Integration Layer'}, key:'ipaas'},
