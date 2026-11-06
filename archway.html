@@ -2685,8 +2685,16 @@ function deserialize(txt){
 }
 $('#btn-export').onclick=()=>{$('#exportjson').value=serialize();$('#exportmodal').classList.add('open');};
 $('#btn-copyjson').onclick=()=>{$('#exportjson').select();document.execCommand('copy');toast('JSON copied');};
-$('#btn-dljson').onclick=()=>{
-  const blob=new Blob([serialize()],{type:'application/json'});
+$('#btn-dljson').onclick=async()=>{
+  const json=serialize();
+  // Hosted-artifact viewers block plain blob downloads; use the downloads capability when present.
+  const dl=(window.claude&&window.claude.use)?await window.claude.use('downloads').catch(()=>null):null;
+  if(dl){
+    try{await dl.save({filename:'archway-architecture.json',data:json});toast('JSON saved');}
+    catch(err){if(!err||err.code!=='declined')toast('Save unavailable here — use Copy instead');}
+    return;
+  }
+  const blob=new Blob([json],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='archway-architecture.json';a.click();
 };
 $('#btn-importjson').onclick=()=>{
